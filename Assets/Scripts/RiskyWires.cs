@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Linq;
 using UnityEngine;
 using KModkit;
@@ -613,4 +614,136 @@ public class RiskyWires : MonoBehaviour
         bombModule.HandlePass();
         moduleSolved = true;
     }
+
+
+    // Twitch Plays support added by Kaito Sinclaire (K_S_)
+#pragma warning disable 414
+    private readonly string TwitchHelpMessage = @"Gamble with '!{0} gamble', or gamble to a specific wire count with '!{0} gamble to 2'; then reveal the wires with '!{0} reveal'. Cut wires and submit with '!{0} cut 1 4 submit'.";
+#pragma warning restore 414
+
+    // Used when a gamble is failed.
+    private readonly string[] gambleAttemptsStr = new string[] { "first", "second", "third", "fourth", "fifth", "sixth" };
+
+    public IEnumerator ProcessTwitchCommand(string command)
+    {
+        Match mt;
+
+        if (Regex.IsMatch(command, @"^\s*gamble(?:\s+to\s+[0-5])?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            // Can't gamble after reveal.
+            if (wiresRevealed)
+                yield break;
+
+            // Default to one gamble. If a specific gamble target is requested though, then use that.
+            int gambleToWhat = wireCount - 1;
+            if ((mt = Regex.Match(command, @"^\s*gamble\s+to\s+([0-5])\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).Success)
+                gambleToWhat = mt.Groups[1].ToString()[0] - '0';
+
+            // But not if the target is higher than what you already have.
+            if (gambleToWhat >= wireCount)
+                yield break;
+
+            yield return null;
+            if (gambleToWhat <= 0) // Needed to suspend TP handler aborting on solve
+                yield return "multiple strikes";
+
+            // Press the gamble button until we're either at the target, or a gamble fails.
+            while (wireCount > gambleToWhat)
+            {
+                yield return new KMSelectable[] { gambleButton };
+                if (wireCount == MAX_WIRES)
+                {
+                    yield return System.String.Format("sendtochaterror Your {0} gamble attempt failed.", gambleAttemptsStr[gambleAttempt-1]);
+                    break;
+                }
+            }
+
+            if (gambleToWhat <= 0)
+            {
+                if (moduleSolved) // A show of complete awe.
+                    yield return "sendtochat You lucky bastard.";
+                yield return "end multiple strikes";
+            }
+        }
+        else if (Regex.IsMatch(command, @"^\s*reveal\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            // Can't reveal more than once.
+            if (wiresRevealed)
+                yield break;
+
+            yield return null;
+            yield return new KMSelectable[] { revealButton };
+        }
+        else if (Regex.IsMatch(command, @"^\s*cut\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            List<KMSelectable> selectsToPress = new List<KMSelectable>();
+            List<string> commandParts = command.Split(new char[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries).ToList();
+            commandParts.RemoveAt(0); // Remove 'cut'
+
+            foreach (string subCmd in commandParts)
+            {
+                // Command to cut a wire?
+                if (subCmd.Length == 1)
+                {
+                    int wireNum = subCmd[0] - '1';
+                    if (wireNum < 0 || wireNum >= wireCount)
+                        yield break;
+                    selectsToPress.Add(wires[wireNum]);
+                }
+                else if (subCmd.Equals("submit", System.StringComparison.InvariantCultureIgnoreCase))
+                    selectsToPress.Add(submitButton); // Accept submit in the middle of a cut command, like Wire Sequence does with 'down'.
+                else
+                    yield break;
+            }
+
+            yield return null;
+            yield return selectsToPress.ToArray();
+        }
+        else if (Regex.IsMatch(command, @"^\s*submit\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            yield return null;
+            yield return new KMSelectable[] { submitButton };
+        }
+
+        yield break;
+    }
+
+    // This exists solely so that all the wire cuts don't happen at once.
+    IEnumerator TwitchForcedSolver()
+    {
+        for (int i = 0; i < wires.Count; ++i)
+        {
+            if (!cutWireRenderers[i].enabled && wiresToCut[i])
+            {
+                CutWire(i);
+                yield return new WaitForSeconds(0.1f);
+            }
+        }
+        CheckSolution();
+        yield break;
+    }
+
+    void TwitchHandleForcedSolve()
+    {
+        if (moduleSolved)
+            return;
+
+        Debug.LogFormat(@"[Risky Wires #{0}] Twitch Plays is requesting a force solve.", moduleId);
+
+        // If the wires aren't revealed, treat it like a successful gamble to 0.
+        if (!wiresRevealed)
+        {
+            bombModule.HandlePass();
+            moduleSolved = true;
+            wiresRevealed = true;
+            oddsPercentage = 0;
+            wireCountDisplay.text = "00";
+            gambleOddsDisplay.text = "00";
+        }
+
+        // If they ARE revealed, cut all wires that should be cut, and submit.
+        // This is handled in a coroutine.
+        else
+            StartCoroutine(TwitchForcedSolver());
+   }
 }
