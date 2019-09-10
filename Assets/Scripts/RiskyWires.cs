@@ -676,6 +676,10 @@ public class RiskyWires : MonoBehaviour
         }
         else if (Regex.IsMatch(command, @"^\s*cut\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
+            // Not before they're revealed! Oops!
+            if (!wiresRevealed)
+                yield break;
+
             List<KMSelectable> selectsToPress = new List<KMSelectable>();
             List<string> commandParts = command.Split(new char[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries).ToList();
             commandParts.RemoveAt(0); // Remove 'cut'
