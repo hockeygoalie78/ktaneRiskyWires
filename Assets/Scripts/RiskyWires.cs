@@ -745,5 +745,5 @@ public class RiskyWires : MonoBehaviour
         // This is handled in a coroutine.
         else
             StartCoroutine(TwitchForcedSolver());
-   }
+    }
 }
