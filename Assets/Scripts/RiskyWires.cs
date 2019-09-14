@@ -618,7 +618,7 @@ public class RiskyWires : MonoBehaviour
 
     // Twitch Plays support added by Kaito Sinclaire (K_S_)
 #pragma warning disable 414
-    private readonly string TwitchHelpMessage = @"Gamble with '!{0} gamble', or gamble to a specific wire count with '!{0} gamble to 2'; then reveal the wires with '!{0} reveal'. Cut wires and submit with '!{0} cut 1 4 submit'.";
+    private readonly string TwitchHelpMessage = @"Gamble with '!{0} gamble', or gamble to a specific wire count with '!{0} gamble to 2'; then reveal the wires with '!{0} reveal'. Cut a wire with '!{0} cut [wire number]' and submit with '!{0} submit' (i.e. cut wires 1 and 4 and submit with '!{0} cut 1 4 submit').";
 #pragma warning restore 414
 
     // Used when a gamble is failed.
