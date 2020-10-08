@@ -44,6 +44,7 @@ public class RiskyWires : MonoBehaviour
     private bool moduleSolved;
     private int randomInt;
     private int[] odds;
+    private int[] generatedOdds;
     private bool specialRules6;
     private bool specialRules8;
     private Dictionary<int, bool> wiresToCut;
@@ -115,6 +116,24 @@ public class RiskyWires : MonoBehaviour
         updatedChildren = new KMSelectable[6] { recessedInner, gambleButton, recessedInner, revealButton, recessedInner, submitButton };
         specialRules6 = false;
         specialRules8 = false;
+
+        //The ModConfig class loads the setting information from the file
+        var modConfig = new ModConfig<RiskyWiresSettings>("RiskyWiresSettings");
+        var setting = modConfig.Read();
+        //Write back to the settings in case there's an issue with the file
+        modConfig.Write(setting);
+        if (setting.enableSeedConsistency)
+        {
+            Debug.LogFormat("<Risky Wires #{0}> Seed consistency is enabled, prerolling gambles.", moduleId);
+            generatedOdds = new int[6];
+            for (int i = 0; i < generatedOdds.Length; i++)
+            {
+                generatedOdds[i] = Random.Range(1, 101);
+                //If gamble would fail, stop further randomization
+                if (generatedOdds[i] > odds[i])
+                    break;
+            }
+        }
 
         //Set up button interactions
         gambleButton.OnInteract += delegate { Gamble(); return false; };
@@ -205,7 +224,10 @@ public class RiskyWires : MonoBehaviour
         }
 
         //Check if gamble is successful and update properly
-        randomInt = Random.Range(1, 101);
+        if (generatedOdds != null)
+            randomInt = generatedOdds[gambleAttempt - 1];
+        else
+            randomInt = Random.Range(1, 101);
         if(randomInt <= oddsPercentage)
         {
             wireCount--;
@@ -615,9 +637,28 @@ public class RiskyWires : MonoBehaviour
         moduleSolved = true;
     }
 
+    //Adds setting information to Mod Selector via Tweaks
+#pragma warning disable 414
+    private static readonly Dictionary<string, object>[] TweaksEditorSettings = new Dictionary<string, object>[]
+    {
+        new Dictionary<string, object>
+        {
+            { "Filename", "RiskyWiresSettings.json" },
+            { "Name", "Risky Wires Settings" },
+            { "Listings", new List<Dictionary<string, object>>
+                {
+                    new Dictionary<string, object>
+                    {
+                        { "Key", "enableSeedConsistency" },
+                        { "Text", "Enable Seed Consistency" },
+                        { "Description", "If desired, force gambling results to be equal for all players playing on a specific seed.\nDisabled by default." }
+                    }
+                }
+            }
+        }
+    };
 
     // Twitch Plays support added by Kaito Sinclaire (K_S_)
-#pragma warning disable 414
     private readonly string TwitchHelpMessage = @"Gamble with '!{0} gamble', or gamble to a specific wire count with '!{0} gamble to [desired wire count]'; then reveal the wires with '!{0} reveal'. Cut a wire with '!{0} cut [wire number]' and submit with '!{0} submit' (i.e. cut wires 1 and 4 and submit with '!{0} cut 1 4 submit').";
 #pragma warning restore 414
 
@@ -749,5 +790,11 @@ public class RiskyWires : MonoBehaviour
         // This is handled in a coroutine.
         else
             StartCoroutine(TwitchForcedSolver());
+    }
+
+    //Disabled by default
+    class RiskyWiresSettings
+    {
+        public bool enableSeedConsistency = false;
     }
 }
